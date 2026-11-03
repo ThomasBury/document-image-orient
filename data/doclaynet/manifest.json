@@ -1,0 +1,40 @@
+[
+  {
+    "page_hash": "009e97e9c901e10ee5f6cbd7b93f6fcbd0ce22e789aedfb7aeb4f49a804c90b4",
+    "original_filename": "NASDAQ_FFIN_2002.pdf",
+    "page_no": 10,
+    "original_width": 612,
+    "original_height": 792,
+    "collection": "ann_reports_00_04_fancy",
+    "doc_category": "financial_reports",
+    "file": "test-0.jpg",
+    "sha256": "72dfa71aa9869e989987bd310bf591fb9a8ea236b44e588b48c4d42df2a61422",
+    "row_index": 0,
+    "dataset": "pierreguillou/DocLayNet-small",
+    "revision": "b61d29f477163034001472614dc97fb9614dddea",
+    "config": "DocLayNet_2022.08_processed_on_2023.01",
+    "split": "test",
+    "source": "https://huggingface.co/datasets/pierreguillou/DocLayNet-small",
+    "retrieved": "2026-11-03",
+    "baseline_orientation": "upright, visually checked"
+  },
+  {
+    "page_hash": "027d1a54c64e56f3757aff3e4bb63856af7a10aeb4496d0e098ece2a5b29d6f1",
+    "original_filename": "TSX_KMP_2013.pdf",
+    "page_no": 39,
+    "original_width": 612,
+    "original_height": 792,
+    "collection": "ann_reports_10_14_fancy",
+    "doc_category": "financial_reports",
+    "file": "test-1.jpg",
+    "sha256": "b8cb34884c67cd5d2520470fa8c27e50606ae2849b051bb4bcf893b4a201f617",
+    "row_index": 1,
+    "dataset": "pierreguillou/DocLayNet-small",
+    "revision": "b61d29f477163034001472614dc97fb9614dddea",
+    "config": "DocLayNet_2022.08_processed_on_2023.01",
+    "split": "test",
+    "source": "https://huggingface.co/datasets/pierreguillou/DocLayNet-small",
+    "retrieved": "2026-11-03",
+    "baseline_orientation": "upright, visually checked"
+  }
+]
