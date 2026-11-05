@@ -49,6 +49,7 @@ def entry(path, **overrides):
 @pytest.mark.parametrize("ccw", ev.ANGLES)
 @pytest.mark.parametrize("flag", ev.ANGLES)
 def test_text_display_correction_and_preservation(tmp_path, ccw, flag):
+    """Exercise every embedded-text/PDF-rotation pairing and preserve original objects."""
     source, destination = tmp_path / "source.pdf", tmp_path / "out.pdf"
     native_document(source, [(ccw, flag)])
     original = source.read_bytes()
@@ -76,6 +77,7 @@ def test_text_display_correction_and_preservation(tmp_path, ccw, flag):
 
 @pytest.mark.parametrize("mode,opacity", [(3, 1), (7, 1), (0, 0), (1, 0)])
 def test_hidden_and_zero_opacity_text_are_not_evidence(mode, opacity):
+    """Reject invisible rendering modes and opacity independently of extracted characters."""
     with fitz.open() as doc:
         page = doc.new_page()
         for i in range(5):
@@ -134,11 +136,13 @@ def test_font_size_does_not_weight_large_rotated_heading():
     ([], "no_visible_horizontal_text"),
 ])
 def test_text_fallback_reasons(lines, reason):
+    """Keep insufficient, conflicting, vertical, and off-axis evidence distinguishable."""
     evidence = ev.text_evidence(TextPage(lines))
     assert evidence["angle"] is None and evidence["reason"] == reason
 
 
 def test_direction_tolerance_support_boundary_and_unicode():
+    """Count Unicode alphanumerics and accept the provisional support boundary."""
     direction = math.cos(math.radians(9.9)), math.sin(math.radians(9.9))
     evidence = ev.text_evidence(TextPage([line(direction)] * 9 + [line((0, 1))]))
     assert evidence["angle"] == 0 and evidence["support"] == .9
@@ -146,6 +150,7 @@ def test_direction_tolerance_support_boundary_and_unicode():
 
 
 def test_obscured_rendered_text_is_a_documented_limit():
+    """Expose the visibility heuristic limit when later objects cover rendered text."""
     with fitz.open() as doc:
         page = doc.new_page()
         for i in range(4):
@@ -156,6 +161,7 @@ def test_obscured_rendered_text_is_a_documented_limit():
 
 
 def test_extraction_failure_falls_back(monkeypatch):
+    """Require extraction errors to leave an automatic image decision available."""
     class BrokenPage:
         def get_text(self, *args, **kwargs):
             raise RuntimeError("broken extraction")
@@ -249,6 +255,7 @@ def test_high_score_dense_center_avoids_views(monkeypatch):
     ((.85, .05, .05, .05), None),
 ])
 def test_score_and_margin_triggers_with_exact_score_boundary(monkeypatch, vector, trigger):
+    """Isolate score triggers from density and check the strict cutoff boundary."""
     monkeypatch.setattr(ev.op, "rasterize", lambda page: varied_image())
     monkeypatch.setattr(ev, "foreground_density", lambda image: dict(full=.1, center=.1))
     result = ev.decide(None, FixedModel(vector), "views")
@@ -260,6 +267,7 @@ def test_score_and_margin_triggers_with_exact_score_boundary(monkeypatch, vector
 
 
 def test_image_fallback_preserves_searchable_scan_streams(tmp_path):
+    """Preserve hidden OCR and image bytes when image evidence changes rotation."""
     source, destination = tmp_path / "scan.pdf", tmp_path / "out.pdf"
     native_document(source, [(90, 180)], searchable_scan=True)
     original = source.read_bytes()
@@ -294,6 +302,7 @@ def test_exact_aggregate_ties_prefer_baseline_then_class_order():
 
 
 def test_text_policy_is_independent_and_combined_short_circuits(monkeypatch):
+    """Require qualifying text to decide without rendering or calling the classifier."""
     monkeypatch.setattr(ev.op, "rasterize", lambda page: pytest.fail("unexpected render"))
     for variant in ("text", "combined"):
         result = ev.decide(TextPage([line()] * 4), None, variant)
@@ -328,6 +337,7 @@ def test_manifest_rejects_invalid_entries(tmp_path, change):
 
 @pytest.mark.parametrize("group", ["original_group", "template_group", "sha256"])
 def test_split_leakage_rejected(tmp_path, group):
+    """Reject cross-split originals, templates, and byte-identical source copies."""
     first, second = tmp_path / "first.pdf", tmp_path / "second.pdf"
     native_document(first)
     if group == "sha256":
@@ -357,6 +367,7 @@ def test_duplicate_and_missing_pdf_rejected(tmp_path):
 
 
 def test_accuracy_denominators_error_types_and_paired_changes():
+    """Exclude ambiguous labels and reconcile residual errors with paired decisions."""
     rows = []
     for variant in (*ev.VARIANTS, "threshold_context"):
         for expected, baseline, angle in [(90, 0, 90), (0, 0, 180), (270, 0, 0), (None, 0, 0)]:
@@ -370,6 +381,7 @@ def test_accuracy_denominators_error_types_and_paired_changes():
 
 
 def test_recommendation_requires_real_test_gain_controls_and_speed():
+    """Keep adoption pending whenever any required evidence or performance gate fails."""
     def row(control, **changes):
         return dict(dict(variant="combined", split="test", expected=0, angle=0,
                          baseline_angle=0, kind="real", control=control), **changes)
@@ -384,6 +396,7 @@ def test_recommendation_requires_real_test_gain_controls_and_speed():
 
 
 def test_runner_five_passes_separate_workers_outputs_and_ambiguous_time(tmp_path, monkeypatch):
+    """Check orchestration and output completeness using deterministic local workers."""
     monkeypatch.chdir(tmp_path)
     source = tmp_path / "source.pdf"
     with fitz.open() as doc:

@@ -61,6 +61,7 @@ def correction_angle(label):
 
 
 def predict(image, model):
+    """Return quarter-turn scores using the official RGB resize and center crop."""
     small = image.convert("RGB")
     small.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
     start = perf_counter()
@@ -88,6 +89,7 @@ def predict(image, model):
 
 
 def rasterize(page, dpi=125):
+    """Render the displayed page while bounding allocation before rasterization."""
     if not dpi > 0:
         raise ValueError("dpi must be positive")
     # get_pixmap applies the existing /Rotate flag, exactly once. Do not reset it.

@@ -113,12 +113,14 @@ def extra_view_boxes(image):
 
 
 def aggregate_scores(vectors, baseline_angle):
+    """Average each view equally and preserve the baseline angle on exact ties."""
     scores = {a: sum(v[a] for v in vectors) / len(vectors) for a in ANGLES}
     winners = [a for a in ANGLES if scores[a] == max(scores.values())]
     return baseline_angle if baseline_angle in winners else winners[0], scores
 
 
 def decide(page, model, variant):
+    """Choose a correction automatically; unavailable text falls back to image evidence."""
     if variant not in VARIANTS:
         raise ValueError(f"Unknown variant: {variant}")
     result = dict(angle=None, reason=[], view_count=0, model_scores=None,
@@ -217,6 +219,7 @@ def write_json(path, value):
 
 
 def process_document(entry, destination, model, variant):
+    """Save rotation-only corrections and include PDF I/O in document latency."""
     started = perf_counter()
     rows = []
     with fitz.open(entry["path"]) as doc:
@@ -232,6 +235,7 @@ def process_document(entry, destination, model, variant):
 
 
 def peak_process_ram():
+    """Report worker peak RAM with the platform-specific measurement limitation."""
     if sys.platform.startswith("linux"):
         # getrusage can retain the notebook parent's pre-exec high-water mark.
         status = Path("/proc/self/status").read_text()
@@ -243,6 +247,7 @@ def peak_process_ram():
 
 
 def worker(spec_path, variant):
+    """Reuse one session across five timed corpus passes after untimed warm-up."""
     spec = json.loads(Path(spec_path).read_text())
     entries = spec["entries"]
     output = Path(spec_path).parent / variant
@@ -302,6 +307,7 @@ def accuracy_rows(rows):
 
 
 def recommendation(rows, ratio):
+    """Require real test gains, regression controls, and the time limit for adoption."""
     test = [r for r in rows if r["variant"] == "combined" and r["split"] == "test"
             and r["expected"] is not None]
     real = [r for r in test if r["kind"] == "real"]
@@ -323,6 +329,7 @@ def recommendation(rows, ratio):
 
 
 def evaluate(manifest):
+    """Validate the corpus, freeze settings, and compare policies in fresh processes."""
     entries = validate_manifest(manifest)
     root = Path.cwd() / "validation_data"
     root.mkdir(exist_ok=True)

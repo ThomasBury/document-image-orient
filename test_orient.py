@@ -25,6 +25,7 @@ LATIN = next(iter(sorted(Path("/usr/share/fonts").rglob("DejaVuSans.ttf"))), Non
 
 
 def font(size, cjk=False):
+    """Use installed script coverage when available and an explicit fallback otherwise."""
     return ImageFont.truetype(str(CJK if cjk else LATIN), size) if (
         CJK if cjk else LATIN) else ImageFont.load_default(size=size)
 
@@ -84,6 +85,7 @@ def agreement(index=0, cjk=False):
 
 
 def sample_pdf(path):
+    """Build known displayed rotations while varying embedded scans and PDF flags."""
     originals = []
     with fitz.open() as pdf:
         for index, (angle, flag) in enumerate(zip(ROTATIONS, FLAGS)):
@@ -106,6 +108,7 @@ def sample_pdf(path):
 @pytest.fixture(scope="session")
 def model():
     # Skip unavailable downloads, while still failing on model/API errors.
+    """Warm the real model once; skip unavailable networking but expose model failures."""
     try:
         instance = op.load_model()
     except HTTPError:
@@ -122,6 +125,7 @@ def mae(a, b):
 
 
 def test_convention(model):
+    """Establish the model-label correction convention independently of PDF flags."""
     upright = agreement()
     for applied in (0, 90, 180, 270):
         rotated = upright.rotate(applied, expand=True)
@@ -134,6 +138,7 @@ def test_convention(model):
 
 
 def test_six_page_pipeline(tmp_path, model):
+    """Check displayed output against independently constructed upright images."""
     source, output = tmp_path / "sample.pdf", tmp_path / "out.pdf"
     originals = sample_pdf(source)
     with fitz.open(source) as doc:
@@ -159,6 +164,7 @@ def test_six_page_pipeline(tmp_path, model):
 
 @pytest.mark.skipif(CJK is None, reason="Noto Sans CJK unavailable; Chinese-name page omitted")
 def test_chinese_names(model):
+    """Exercise CJK printed names when the required system font is installed."""
     angle, confidence, _, _ = op.predict(agreement(5, cjk=True), model)
     assert angle == 0 and confidence >= .6
 
@@ -175,6 +181,7 @@ def test_chinese_names(model):
 ])
 def test_onnx_matches_paddle_reference(model, index, ccw, expected_scores):
     # Captured from PaddleX 3.7.2 / PaddlePaddle 3.3.1 on these bundled image bytes.
+    """Compare ONNX scores with captured Paddle outputs on fixed public images."""
     with Image.open(f"data/doclaynet/test-{index}.jpg") as image:
         angle, _, scores, _ = op.predict(image.rotate(ccw, expand=True), model)
     assert angle == (-ccw) % 360
@@ -196,6 +203,7 @@ class FixedModel:
 
 
 def test_abstain_close_scores(tmp_path, capsys):
+    """Require low-confidence pages to retain both their display and PDF contents."""
     model = FixedModel((.48, .02, .49, .01))
     source = tmp_path / "large.pdf"
     with fitz.open() as doc:
@@ -236,6 +244,7 @@ def test_rotate_flag(tmp_path):
 @pytest.mark.parametrize("ccw", (0, 90, 180, 270))
 @pytest.mark.parametrize("flag", (0, 90, 180, 270))
 def test_pdf_rotation_preserves_original_streams(tmp_path, ccw, flag):
+    """Check all scan/flag combinations without accepting recompression or data loss."""
     source, output = tmp_path / "source.pdf", tmp_path / "output.pdf"
     upright = agreement().resize((500, 700))
     scan = upright.rotate((ccw + flag) % 360, expand=True)
@@ -265,6 +274,7 @@ def test_pdf_rotation_preserves_original_streams(tmp_path, ccw, flag):
 
 
 def test_preprocessing_preserves_rgb_and_uses_native_crop():
+    """Detect channel-order, crop, or normalization changes at the model input."""
     image = Image.new("RGB", (512, 768), (10, 20, 30))
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, 0, 511, 120), fill="red")
@@ -295,6 +305,7 @@ def test_preview_is_bounded_before_rendering(flag):
 
 
 def test_model_download_is_verified_cached_and_cpu_only(tmp_path, monkeypatch):
+    """Check verified cache publication, reuse, and CPU session settings without network I/O."""
     weights = b"test weights"
     checksum = hashlib.sha256(weights).hexdigest()
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
@@ -324,6 +335,7 @@ def test_model_download_is_verified_cached_and_cpu_only(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("interrupted", (False, True))
 def test_failed_download_never_publishes_weights(tmp_path, monkeypatch, interrupted):
+    """Require corrupt and interrupted downloads to leave no reusable model file."""
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     monkeypatch.setenv("ORIENT_THREADS", "2")
 
@@ -349,6 +361,7 @@ def test_invalid_threads_fail_before_download(monkeypatch, threads):
 
 @pytest.mark.parametrize("alias", ("same", "symlink", "hardlink"))
 def test_input_cannot_be_overwritten(tmp_path, alias):
+    """Protect the source even when a destination alias uses a symlink or hard link."""
     source = tmp_path / "source.pdf"
     source.write_bytes(b"original")
     destination = source if alias == "same" else tmp_path / "alias.pdf"
