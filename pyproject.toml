@@ -1,19 +1,16 @@
 [project]
 name = "document-image-orient"
 version = "0.1.0"
-description = "CPU-only scanned PDF orientation correction with PaddleX PP-LCNet"
+description = "Lossless scanned PDF orientation correction with PP-LCNet and ONNX Runtime"
 readme = "README.md"
-# PaddlePaddle 3.3.1 publishes Python 3.13 wheels, but no Python 3.14 wheels.
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "paddlepaddle==3.3.1",
-    "paddlex==3.7.2",
+    "onnxruntime==1.31.1",
     "pymupdf==1.26.7",
     "pillow==13.0.0",
     "numpy==2.3.5",
-    # Required by PaddleX's internal readers; rasterization still uses PyMuPDF.
+    # Match the official model's OpenCV resize and normalization.
     "opencv-contrib-python==4.10.0.84",
-    "pypdfium2==5.14.0",
 ]
 
 [dependency-groups]
