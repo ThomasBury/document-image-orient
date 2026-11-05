@@ -1,29 +1,57 @@
 """CPU page orientation: uv run python orient_pdf.py in.pdf out.pdf
 
 Install with uv sync --locked; first use downloads PP-LCNet weights. Python 3.13.
-ORIENT_THRESHOLD=0.6 controls abstention; ORIENT_THREADS=4 controls CPU threads.
-Indices are zero-based; angles are model labels; ms measures inference only.
-Output is a JPEG raster PDF at 125 DPI, preserving physical page size (swapped when
-needed). Low-confidence pages stay as displayed and need manual review.
+ORIENT_THRESHOLD=0.6 controls abstention; ORIENT_THREADS=2 controls CPU threads.
+Indices are zero-based; angles are model labels; ms includes model preprocessing.
+Output preserves original PDF contents and changes only accepted page rotations.
+Low-confidence pages stay as displayed and need manual review.
 Only quarter turns are handled; confident mistakes on handwriting remain possible.
-OpenCV and pypdfium2 are required internally by PaddleX; rasterization uses fitz.
+The classifier uses the original model's 224-pixel center crop, not the whole page.
 """
-import io
+import hashlib
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 from time import perf_counter
+from urllib.request import urlopen
 
+import cv2
 import fitz
 import numpy as np
+import onnxruntime as ort
 from PIL import Image
+
+MODEL_URL = (
+    "https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_doc_ori_onnx/resolve/"
+    "7330ab7039123e46af2dc03154b9969aa412c61d/inference.onnx"
+)
+MODEL_SHA256 = "af9a0a4f317ff0709ce752067807f819cb15d883f8ecad89f28df1c6ee2d9c92"
 
 
 def load_model():
-    from paddlex import create_model
+    """Load one reusable CPU session; cache the pinned, verified official weights."""
+    threads = int(os.getenv("ORIENT_THREADS", "2"))
+    if threads < 1:
+        raise ValueError("ORIENT_THREADS must be a positive integer")
+    cache = Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache")) / "document-image-orient"
+    path = cache / f"{MODEL_SHA256}.onnx"
+    if not path.exists():
+        cache.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=cache) as temporary:
+            download = Path(temporary) / "inference.onnx"
+            with urlopen(MODEL_URL, timeout=60) as response, download.open("wb") as target:
+                shutil.copyfileobj(response, target)
+            with download.open("rb") as source:
+                if hashlib.file_digest(source, "sha256").hexdigest() != MODEL_SHA256:
+                    raise ValueError("Downloaded model checksum does not match")
+            download.replace(path)
 
-    return create_model(model_name="PP-LCNet_x1_0_doc_ori", device="cpu",
-                        cpu_threads=int(os.getenv("ORIENT_THREADS", "4")))
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = threads
+    options.inter_op_num_threads = 1
+    return ort.InferenceSession(path, sess_options=options, providers=["CPUExecutionProvider"])
 
 
 def correction_angle(label):
@@ -33,22 +61,41 @@ def correction_angle(label):
 
 
 def predict(image, model):
-    small = image.convert("RGB").copy()
+    """Return quarter-turn scores using the official RGB resize and center crop."""
+    small = image.convert("RGB")
     small.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
-    # PaddleX numpy inputs use BGR; preserve the entire page, including margins.
-    bgr = np.ascontiguousarray(np.asarray(small)[:, :, ::-1])
     start = perf_counter()
-    result = next(iter(model.predict(bgr, topk=4)))
-    elapsed_ms = (perf_counter() - start) * 1000
-    scores = {int(label): float(score) for label, score in
-              zip(result["label_names"], result["scores"])}
+    rgb = np.asarray(small)
+    height, width = rgb.shape[:2]
+    scale = 256 / min(height, width)
+    rgb = cv2.resize(rgb, (round(width * scale), round(height * scale)),
+                     interpolation=cv2.INTER_LINEAR)
+    height, width = rgb.shape[:2]
+    x, y = (width - 224) // 2, (height - 224) // 2
+    # Match PaddleX's resize, center crop and per-channel normalization exactly.
+    channels = []
+    for channel, mean, std in zip(cv2.split(rgb[y:y + 224, x:x + 224]),
+                                  (.485, .456, .406), (.229, .224, .225)):
+        channel = channel.astype(np.float32)
+        channel *= 1 / 255 / std
+        channel += -mean / std
+        channels.append(channel)
+    tensor = np.stack(channels)[None]
+    probabilities = model.run(None, {model.get_inputs()[0].name: tensor})[0][0]
+    scores = dict(zip((0, 90, 180, 270), map(float, probabilities)))
     angle = max(scores, key=scores.get)
+    elapsed_ms = (perf_counter() - start) * 1000
     return angle, scores[angle], scores, elapsed_ms
 
 
 def rasterize(page, dpi=125):
+    """Render the displayed page while bounding allocation before rasterization."""
+    if not dpi > 0:
+        raise ValueError("dpi must be positive")
     # get_pixmap applies the existing /Rotate flag, exactly once. Do not reset it.
-    pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB, alpha=False)
+    # Leave one pixel for renderer rounding; cap before allocating the preview.
+    scale = min(dpi / 72, 1599 / max(page.rect.width, page.rect.height))
+    pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), colorspace=fitz.csRGB, alpha=False)
     return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
 
@@ -73,24 +120,22 @@ def orient_pages(document, model, threshold=0.6):
 
 
 def orient_pdf(source, destination, model=None, threshold=None):
-    """Write pages incrementally; reuse a caller's model across documents."""
-    if Path(source).resolve() == Path(destination).resolve():
+    """Preserve PDF contents; reuse a caller's model across documents."""
+    if (Path(source).resolve() == Path(destination).resolve() or
+            (Path(destination).exists() and Path(source).samefile(destination))):
         raise ValueError("input and output must be different paths")
     if threshold is None:
         threshold = float(os.getenv("ORIENT_THRESHOLD", "0.6"))
+    if not 0 <= threshold <= 1:
+        raise ValueError("threshold must be between 0 and 1")
     if model is None:
         model = load_model()
-    with fitz.open(source) as doc, fitz.open() as output:
-        for index, angle, confidence, image in orient_pages(doc, model, threshold):
-            rect = doc[index].rect  # Physical dimensions already include /Rotate.
-            width, height = rect.width, rect.height
-            if confidence >= threshold and correction_angle(angle) in (90, 270):
-                width, height = height, width
-            page = output.new_page(width=width, height=height)
-            buffer = io.BytesIO()
-            image.save(buffer, format="JPEG", quality=95, subsampling=0)
-            page.insert_image(page.rect, stream=buffer.getvalue())
-        output.save(destination, deflate=True)
+    with fitz.open(source) as doc:
+        for index, angle, confidence, _ in orient_pages(doc, model, threshold):
+            if confidence >= threshold:
+                page = doc[index]
+                page.set_rotation((page.rotation - correction_angle(angle)) % 360)
+        doc.save(destination)
 
 
 if __name__ == "__main__":
