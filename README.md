@@ -123,13 +123,17 @@ These commands write PDFs in the current directory.
 
 For visual qualitative validation, open
 [orientation_validation.ipynb](orientation_validation.ipynb). Its saved outputs show
-successful rotations, mixed scripts, a real confident classification failure, and
-low-confidence reviews, plus accuracy by document, a confidence-threshold comparison,
-and warm prediction-time statistics. The gallery renders the actual saved output PDFs.
+rotations and mixed scripts, plus accuracy by document, a confidence-threshold
+comparison, and warm prediction-time statistics. The gallery renders the actual
+saved output PDFs and includes classification failures and reviews when present.
 It uses three synthetic signatory PDFs and two bundled public DocLayNet pages, each
 at four rotations. The [public data notes](data/doclaynet/README.md) include the
 dataset license, provenance, and checksums. These selected examples are not a
 production accuracy benchmark.
+
+The synthetic signatures use three invented handwriting styles with connected
+letterforms, pen lifts, and small variations in spacing and baseline. They are
+drawn examples, not captured human signatures.
 
 ```sh
 uv sync --locked --group notebook
