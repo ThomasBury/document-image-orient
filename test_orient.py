@@ -30,9 +30,75 @@ def font(size, cjk=False):
         CJK if cjk else LATIN) else ImageFont.load_default(size=size)
 
 
+# Invented pen paths: a looped E. Garcia, angular F. Muller, and compact A. Lopez.
+# Separate paths are pen lifts, including dots, crossbars, and optional flourishes.
+SIGNATURES = (
+    (
+        [(28, -25), (8, -29), (0, -16), (17, -9), (8, -10), (-1, 1),
+         (8, 8), (32, 0)],
+        [(38, 2), (40, 3)],
+        [(85, -23), (73, -30), (51, -17), (48, 0), (63, 7), (80, -1),
+         (82, -13), (70, -9), (84, -7), (83, 3), (91, -2),
+         (100, -10), (93, -12), (88, -2), (94, 3), (103, -10), (101, 3),
+         (111, -3), (120, -14), (115, -3), (123, -9), (131, -6),
+         (142, -10), (134, -12), (128, -2), (137, 3), (149, -5),
+         (151, -11), (148, 1), (155, 2), (168, -9), (160, -12),
+         (155, -2), (162, 3), (171, -10), (170, 3), (190, -4)],
+        [(153, -22), (155, -23)],
+        [(33, 15), (103, 10), (183, 9), (213, 3)],
+    ),
+    (
+        [(5, 8), (15, -29), (9, -32), (1, -25), (33, -30), (43, -26)],
+        [(4, -9), (31, -13)],
+        [(43, 5), (45, 6)],
+        [(62, 5), (70, -27), (77, -4), (91, -28), (88, 2), (98, -4),
+         (105, -12), (101, 0), (108, 3), (117, -12), (114, 1),
+         (123, -3), (139, -30), (134, -32), (125, -15), (125, 2),
+         (135, -2), (151, -31), (146, -33), (137, -13), (138, 2),
+         (151, -3), (159, -11), (153, -13), (147, -5), (151, 2),
+         (163, -2), (173, -15), (167, 1), (177, -8), (185, -4), (204, -9)],
+        [(107, -22), (109, -23)],
+        [(116, -23), (118, -24)],
+    ),
+    (
+        [(0, 6), (18, -28), (24, -30), (25, -4), (31, 5), (38, 1)],
+        [(5, -6), (31, -10)],
+        [(43, 3), (44, 4)],
+        [(66, -27), (61, -31), (53, -22), (57, -13), (65, -20),
+         (58, 2), (49, 6), (73, 2), (83, -5),
+         (90, -12), (81, -14), (76, -5), (81, 2), (90, -5), (87, -11),
+         (95, -6), (103, -14), (95, 19), (94, 9), (103, -8),
+         (110, -12), (115, -6), (108, 1), (102, -2), (117, -4),
+         (128, -11), (121, -13), (116, -5), (120, 1), (134, -5),
+         (144, -13), (135, -13), (150, -15), (138, 1), (153, -1), (170, -7)],
+        [(51, 13), (109, 10), (162, 12), (185, 6)],
+    ),
+)
+
+
+def draw_signature(draw, xy, style, seed=0):
+    """Draw repeatable, imperfect handwriting without requiring a script font."""
+    rng = random.Random(seed)
+    stretch = rng.uniform(1.1, 1.4)
+    rise = rng.uniform(-.035, .025)
+    for stroke in SIGNATURES[style]:
+        points = np.array([(xy[0] + stretch * x + .15 * -y + rng.uniform(-.6, .6),
+                            xy[1] + y + rise * x + rng.uniform(-.6, .6)) for x, y in stroke])
+        # Catmull-Rom curves pass through the pen points without jagged corners.
+        padded = np.vstack((points[0], points, points[-1]))
+        smooth = []
+        for p0, p1, p2, p3 in zip(padded, padded[1:], padded[2:], padded[3:]):
+            for t in np.linspace(0, 1, 8):
+                point = .5 * ((2 * p1) + (-p0 + p2) * t +
+                              (2 * p0 - 5 * p1 + 4 * p2 - p3) * t**2 +
+                              (-p0 + 3 * p1 - 3 * p2 + p3) * t**3)
+                smooth.append(tuple(point))
+        draw.line(smooth, fill=("#233e78", "#263957", "#304b87")[style],
+                  width=3 if style == 1 else 2, joint="curve")
+
+
 def agreement(index=0, cjk=False):
     """A4-like page with prose and 2–3 named, handwritten signatory blocks."""
-    rng = random.Random(420 + index)
     image = Image.new("RGB", (1000, 1400), "#fdfcf9")
     draw = ImageDraw.Draw(image)
     draw.text((80, 60), "RIVERTON  /  SERVICES AGREEMENT", font=font(29), fill="#20364c")
@@ -67,14 +133,7 @@ def agreement(index=0, cjk=False):
     for n, name in enumerate(names[:2 + index % 2]):
         sy = y + 60 + n * 125
         draw.text((80, sy), name, font=font(20, cjk), fill="#222222")
-        # Several smooth-ish polyline loops and a flourish, resembling blue ink.
-        points = [(410 + t * 5, sy + 52 + int(13 * np.sin(t * .85)) + rng.randint(-8, 8))
-                  for t in range(65)]
-        draw.line(points, fill="#233e78", width=2, joint="curve")
-        for _ in range(2):
-            x = rng.randint(440, 640)
-            draw.arc((x, sy + 12, x + 45, sy + 66), 20, 330, fill="#233e78", width=2)
-        draw.line((410, sy + 69, 815, sy + 54), fill="#233e78", width=2)
+        draw_signature(draw, (410, sy + 50), n, seed=420 + index * 3 + n)
         draw.text((80, sy + 42), "Signed: 03 Nov 2026", font=font(16), fill="#555555")
         draw.line((80, sy + 92, 920, sy + 92), fill="#c5c5c5")
     draw.text((80, 1340), f"Riverton Partners  •  Executed copy     |     Page {index + 1}",
@@ -103,6 +162,25 @@ def sample_pdf(path):
             page.set_rotation(flag)
         pdf.save(path, deflate=True)
     return originals
+
+
+def test_signatures_are_distinct_repeatable_and_fit_signatory_block():
+    samples = []
+    for style in range(len(SIGNATURES)):
+        def render(seed):
+            image = Image.new("RGB", (420, 100), "white")
+            draw_signature(ImageDraw.Draw(image), (20, 50), style, seed)
+            return np.asarray(image)
+
+        first = render(42)
+        assert np.array_equal(first, render(42))
+        assert not np.array_equal(first, render(43))
+        ys, xs = np.where(np.any(first != 255, axis=2))
+        assert 0 < xs.min() < xs.max() < 400
+        assert 5 < ys.min() < ys.max() < 80
+        assert len(xs) > 500
+        samples.append(first)
+    assert all(not np.array_equal(a, b) for a, b in zip(samples, samples[1:]))
 
 
 @pytest.fixture(scope="session")
