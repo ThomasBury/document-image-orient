@@ -126,10 +126,11 @@ For visual qualitative validation, open
 rotations and mixed scripts, plus accuracy by document, a confidence-threshold
 comparison, and warm prediction-time statistics. The gallery renders the actual
 saved output PDFs and includes classification failures and reviews when present.
-It uses three synthetic signatory PDFs and two bundled public DocLayNet pages, each
-at four rotations. The [public data notes](data/doclaynet/README.md) include the
-dataset license, provenance, and checksums. These selected examples are not a
-production accuracy benchmark.
+It uses four synthetic signatory PDFs, including a sparse layout with one printed
+line and three signatures, and two bundled public DocLayNet pages. The sparse and
+public layouts each run at four rotations. The
+[public data notes](data/doclaynet/README.md) include the dataset license, provenance,
+and checksums. These selected examples are not a production accuracy benchmark.
 
 The synthetic signatures use three invented handwriting styles with connected
 letterforms, pen lifts, and small variations in spacing and baseline. They are
