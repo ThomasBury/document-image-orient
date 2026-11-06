@@ -165,6 +165,7 @@ def sample_pdf(path):
 
 
 def test_signatures_are_distinct_repeatable_and_fit_signatory_block():
+    """Check style diversity, seeded variation, and ink staying inside each block."""
     samples = []
     for style in range(len(SIGNATURES)):
         def render(seed):
